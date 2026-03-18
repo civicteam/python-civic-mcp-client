@@ -1,0 +1,42 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "civic-mcp-client"
+version = "0.1.0"
+description = "Python client library for connecting to the Civic MCP Hub."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Civic" }]
+dependencies = [
+  "httpx",
+]
+
+[project.optional-dependencies]
+pydanticai = ["pydantic-ai"]
+langchain = ["langchain-core"]
+fastmcp = ["fastmcp"]
+examples = ["python-dotenv[cli]"]
+test = [
+  "pytest",
+  "pytest-asyncio",
+  "respx",
+]
+
+[dependency-groups]
+test = [
+  "pytest",
+  "pytest-asyncio",
+  "respx",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+  "integration: marks tests that require external services and credentials",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/civic_mcp_client"]
