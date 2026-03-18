@@ -1,4 +1,5 @@
 # Civic MCP Client
+[![CI](https://github.com/civicteam/python-civic-mcp-client/actions/workflows/python-app.yml/badge.svg?branch=main)](https://github.com/civicteam/python-civic-mcp-client/actions/workflows/python-app.yml)
 
 Python client library for connecting to the Civic MCP Hub with direct bearer token auth
 or RFC 8693 token exchange.
