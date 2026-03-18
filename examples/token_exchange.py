@@ -7,9 +7,14 @@ from civic_mcp_client import CivicMCPClient
 
 
 def get_subject_token() -> str:
-    token = os.getenv("EXTERNAL_SUBJECT_TOKEN")
+    # Use CIVIC_ACCESS_TOKEN as the subject token (Civic token exchange: exchange it
+    # for a new token with profile lock, etc.). For federated exchange (external IdP),
+    # pass the external token from your auth flow instead of using this env var.
+    # If you see "client is not authorized to use token exchange grant", enable
+    # token exchange for your app in the Civic dashboard (Setup > Token Exchange).
+    token = os.getenv("CIVIC_ACCESS_TOKEN")
     if not token:
-        raise RuntimeError("EXTERNAL_SUBJECT_TOKEN is required for token exchange")
+        raise RuntimeError("CIVIC_ACCESS_TOKEN is required for token exchange")
     return token
 
 
@@ -28,8 +33,7 @@ async def main() -> None:
                 "auth_url": os.getenv("CIVIC_AUTH_URL", "https://auth.civic.com/oauth/token"),
             }
         },
-        url=os.getenv("CIVIC_MCP_HUB_URL", "https://nexus.civic.com/hub/mcp"),
-        civic_account=os.getenv("CIVIC_ACCOUNT_ID"),
+        url=os.getenv("CIVIC_MCP_HUB_URL", "https://app.civic.com/hub/mcp"),
         civic_profile=os.getenv("CIVIC_PROFILE_ID"),
     )
 

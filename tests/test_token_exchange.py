@@ -19,12 +19,10 @@ def config() -> TokenExchangeConfig:
     )
 
 
-async def _make_requester(tokens: AsyncIterator[dict[str, object]], calls: list[tuple[str, str | None, str | None]]):
-    async def requester(
-        cfg: TokenExchangeConfig, subject: str, civic_account: str | None, civic_profile: str | None
-    ) -> dict[str, object]:
+async def _make_requester(tokens: AsyncIterator[dict[str, object]], calls: list[tuple[str, str | None]]):
+    async def requester(cfg: TokenExchangeConfig, subject: str, civic_profile: str | None) -> dict[str, object]:
         del cfg
-        calls.append((subject, civic_account, civic_profile))
+        calls.append((subject, civic_profile))
         return await anext(tokens)
 
     return requester
@@ -32,7 +30,7 @@ async def _make_requester(tokens: AsyncIterator[dict[str, object]], calls: list[
 
 @pytest.mark.asyncio
 async def test_token_exchange_happy_path_and_cache(config: TokenExchangeConfig) -> None:
-    calls: list[tuple[str, str | None, str | None]] = []
+    calls: list[tuple[str, str | None]] = []
 
     async def payloads() -> AsyncIterator[dict[str, object]]:
         yield {"access_token": "token-1", "expires_in": 120}
@@ -40,17 +38,17 @@ async def test_token_exchange_happy_path_and_cache(config: TokenExchangeConfig) 
     requester = await _make_requester(payloads(), calls)
     manager = TokenExchangeManager(config, requester=requester)
 
-    token1 = await manager.get_access_token(civic_account="account", civic_profile="profile")
-    token2 = await manager.get_access_token(civic_account="account", civic_profile="profile")
+    token1 = await manager.get_access_token(civic_profile="profile")
+    token2 = await manager.get_access_token(civic_profile="profile")
 
     assert token1 == "token-1"
     assert token2 == "token-1"
-    assert calls == [("subject-token", "account", "profile")]
+    assert calls == [("subject-token", "profile")]
 
 
 @pytest.mark.asyncio
 async def test_token_refresh_on_expiry(config: TokenExchangeConfig) -> None:
-    calls: list[tuple[str, str | None, str | None]] = []
+    calls: list[tuple[str, str | None]] = []
 
     async def payloads() -> AsyncIterator[dict[str, object]]:
         # Force immediate expiry (expires_in <= 0 => expires_at = now)
@@ -71,7 +69,7 @@ async def test_token_refresh_on_expiry(config: TokenExchangeConfig) -> None:
 
 @pytest.mark.asyncio
 async def test_token_change_invalidates_cache() -> None:
-    calls: list[tuple[str, str | None, str | None]] = []
+    calls: list[tuple[str, str | None]] = []
     current_subject = {"value": "subject-a"}
 
     config = TokenExchangeConfig(
@@ -100,10 +98,8 @@ async def test_token_change_invalidates_cache() -> None:
 
 @pytest.mark.asyncio
 async def test_empty_subject_token_clears_and_raises(config: TokenExchangeConfig) -> None:
-    async def requester(
-        cfg: TokenExchangeConfig, subject: str, civic_account: str | None, civic_profile: str | None
-    ) -> dict[str, object]:
-        del cfg, subject, civic_account, civic_profile
+    async def requester(cfg: TokenExchangeConfig, subject: str, civic_profile: str | None) -> dict[str, object]:
+        del cfg, subject, civic_profile
         return {"access_token": "token-1", "expires_in": 120}
 
     manager = TokenExchangeManager(config, requester=requester)
@@ -120,11 +116,9 @@ async def test_concurrent_calls_deduplicate_exchange(config: TokenExchangeConfig
     call_count = 0
     gate = asyncio.Event()
 
-    async def requester(
-        cfg: TokenExchangeConfig, subject: str, civic_account: str | None, civic_profile: str | None
-    ) -> dict[str, object]:
+    async def requester(cfg: TokenExchangeConfig, subject: str, civic_profile: str | None) -> dict[str, object]:
         nonlocal call_count
-        del cfg, subject, civic_account, civic_profile
+        del cfg, subject, civic_profile
         call_count += 1
         await gate.wait()
         return {"access_token": "token-shared", "expires_in": 120}
@@ -139,3 +133,22 @@ async def test_concurrent_calls_deduplicate_exchange(config: TokenExchangeConfig
     assert result1 == "token-shared"
     assert result2 == "token-shared"
     assert call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_expires_in_config_is_available_to_requester() -> None:
+    config = TokenExchangeConfig(
+        client_id="client-id",
+        client_secret="client-secret",
+        subject_token=lambda: "subject-token",
+        expires_in=3600,
+    )
+
+    async def requester(cfg: TokenExchangeConfig, subject: str, civic_profile: str | None) -> dict[str, object]:
+        del subject, civic_profile
+        assert cfg.expires_in == 3600
+        return {"access_token": "token-1", "expires_in": 120}
+
+    manager = TokenExchangeManager(config, requester=requester)
+    token = await manager.get_access_token()
+    assert token == "token-1"

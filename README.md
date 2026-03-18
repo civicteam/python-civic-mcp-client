@@ -22,7 +22,6 @@ from civic_mcp_client import CivicMCPClient
 
 client = CivicMCPClient(
     auth={"token": "your-civic-access-token"},
-    civic_account="550e8400-e29b-41d4-a716-446655440000",
     civic_profile="7c9e6679-7425-40de-944b-e07fc1f90ae7",
 )
 
@@ -45,9 +44,9 @@ client = CivicMCPClient(
             "client_id": os.environ["CIVIC_CLIENT_ID"],
             "client_secret": os.environ["CIVIC_CLIENT_SECRET"],
             "subject_token": lambda: "external-token",
+            "expires_in": 3600,  # optional requested lifetime in seconds
         }
     },
-    civic_account="550e8400-e29b-41d4-a716-446655440000",
     civic_profile="7c9e6679-7425-40de-944b-e07fc1f90ae7",
 )
 ```
@@ -59,11 +58,17 @@ The token exchange manager provides:
 - in-flight deduplication for concurrent calls
 - expiry buffer of `min(30s, expires_in / 2)`
 
+Current access token can be retrieved via:
+
+```python
+token = await client.get_access_token()
+```
+
 ## Testing
 
 ```bash
-uv run pytest
-uv run pytest -m integration
+uv run --extra test python -m pytest
+uv run --extra test python -m pytest -m integration
 ```
 
 ## Manual Test Examples
@@ -96,38 +101,29 @@ uv run python -m dotenv run -- python direct_token.py
 
 ## Library Integrations
 
-- `civic_mcp_client.adapters.pydanticai` for PydanticAI toolset-style integration
-- `civic_mcp_client.adapters.langchain` for LangChain `bind_tools`-ready schemas
-- `civic_mcp_client.adapters.fastmcp` for FastMCP-backed runtime bridge
+Use `await client.adapt_for(...)` with the adapter for your framework. It returns either a new `CivicMCPClient` (for backend adapters like FastMCP) or adapter-native tool output (e.g. list of schemas or tool definitions).
 
 ### PydanticAI
 
 ```python
 from civic_mcp_client import CivicMCPClient
-from civic_mcp_client.adapters.pydanticai import to_pydanticai_toolset
+from civic_mcp_client.adapters.pydanticai import pydanticai
 
 client = CivicMCPClient(auth={"token": "your-civic-access-token"})
-toolset = to_pydanticai_toolset(client)
-
-tools = await toolset.list_tools()
-result = await toolset.call_tool("tool-name", {"arg": "value"})
+tools = await client.adapt_for(pydanticai())
 ```
 
 ### LangChain
 
 ```python
 from civic_mcp_client import CivicMCPClient
-from civic_mcp_client.adapters.langchain import (
-    execute_langchain_tool_call,
-    get_langchain_tool_schemas,
-)
+from civic_mcp_client.adapters.langchain import execute_langchain_tool_call, langchain
 
 client = CivicMCPClient(auth={"token": "your-civic-access-token"})
-tool_schemas = await get_langchain_tool_schemas(client)
+tool_schemas = await client.adapt_for(langchain())
 
 # model = model.bind_tools(tool_schemas)
 # response = model.invoke("...")
-# Assume response tool call payload in response.tool_calls[0]
 # tool_result = await execute_langchain_tool_call(client, response.tool_calls[0])
 ```
 
@@ -135,15 +131,21 @@ tool_schemas = await get_langchain_tool_schemas(client)
 
 ```python
 from civic_mcp_client import CivicMCPClient
-from civic_mcp_client.adapters.fastmcp import create_fastmcp_backend
+from civic_mcp_client.adapters.fastmcp import fastmcp
 
-backend = await create_fastmcp_backend("https://nexus.civic.com/hub/mcp")
 client = CivicMCPClient(
     auth={"token": "your-civic-access-token"},
-    civic_account="optional-account-id",
     civic_profile="optional-profile-id",
-    backend=backend,
+    url="https://app.civic.com/hub/mcp",
 )
+
+fastmcp_client = await client.adapt_for(fastmcp())
+# fastmcp_client is a CivicMCPClient with FastMCP backend; auth/headers come from config
+tools = await fastmcp_client.get_tools()
 ```
 
-In this mode, auth and context headers still come from `CivicMCPClient` config.
+## Interface Notes
+
+- `civic_account` was removed from Python client config to match the updated TypeScript direction.
+- `civic_profile` remains supported and maps to `x-civic-profile-id`.
+- `TokenExchangeConfig` supports `expires_in` and `lock_to_profile` (account lock removed).

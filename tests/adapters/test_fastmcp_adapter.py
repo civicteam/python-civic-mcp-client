@@ -5,7 +5,8 @@ from types import ModuleType
 
 import pytest
 
-from civic_mcp_client.adapters.fastmcp import FastMCPDependencyError, create_fastmcp_backend
+from civic_mcp_client.adapters.fastmcp import FastMCPDependencyError, fastmcp
+from civic_mcp_client.client import CivicMCPClient
 
 
 class FakeTransport:
@@ -54,15 +55,37 @@ class FakeFastMCPClient:
         self.closed = True
 
 
+class StubBackend:
+    async def list_tools(self, headers: dict[str, str]):
+        del headers
+        return {"tools": []}
+
+    async def get_server_instructions(self, headers: dict[str, str]) -> str:
+        del headers
+        return ""
+
+    async def call_tool(self, name: str, args: dict[str, object], headers: dict[str, str]):
+        del name, args, headers
+        return {}
+
+    async def close(self) -> None:
+        return None
+
+
 @pytest.mark.asyncio
-async def test_create_fastmcp_backend_import_error(monkeypatch: pytest.MonkeyPatch):
+async def test_fastmcp_adapt_for_import_error(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setitem(sys.modules, "fastmcp", None)
+    client = CivicMCPClient(
+        auth={"token": "token"},
+        url="https://example.com/mcp",
+        backend=StubBackend(),
+    )
     with pytest.raises(FastMCPDependencyError):
-        await create_fastmcp_backend("https://example.com/mcp")
+        await client.adapt_for(fastmcp())
 
 
 @pytest.mark.asyncio
-async def test_create_fastmcp_backend_and_bridge(monkeypatch: pytest.MonkeyPatch):
+async def test_fastmcp_adapt_for_returns_client_with_headers(monkeypatch: pytest.MonkeyPatch):
     FakeFastMCPClient.instances.clear()
     FakeTransport.instances.clear()
     module = ModuleType("fastmcp")
@@ -72,20 +95,17 @@ async def test_create_fastmcp_backend_and_bridge(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setitem(sys.modules, "fastmcp", module)
     monkeypatch.setitem(sys.modules, "fastmcp.client", client_mod)
 
-    backend = await create_fastmcp_backend("https://example.com/mcp")
-    tools = await backend.list_tools(headers={"Authorization": "Bearer token-a"})
-    assert tools["tools"][0]["name"] == "search_docs"
-
-    instructions = await backend.get_server_instructions(headers={"Authorization": "Bearer token-a"})
-    assert instructions == "server instructions"
-
-    call = await backend.call_tool(
-        "search_docs",
-        {"query": "hello"},
-        headers={"Authorization": "Bearer token-b"},
+    client = CivicMCPClient(
+        auth={"token": "token"},
+        civic_profile="profile-456",
+        url="https://example.com/mcp",
+        backend=StubBackend(),
     )
-    assert call["args"]["query"] == "hello"
-    assert len(FakeFastMCPClient.instances) == 2
-    assert len(FakeTransport.instances) == 2
-    assert FakeTransport.instances[0].headers["Authorization"] == "Bearer token-a"
-    assert FakeTransport.instances[1].headers["Authorization"] == "Bearer token-b"
+    adapted = await client.adapt_for(fastmcp())
+    assert isinstance(adapted, CivicMCPClient)
+    tools = await adapted.get_tools()
+    assert tools["tools"][0]["name"] == "search_docs"
+    assert FakeTransport.instances
+    last_headers = FakeTransport.instances[-1].headers
+    assert last_headers["Authorization"] == "Bearer token"
+    assert last_headers["x-civic-profile-id"] == "profile-456"

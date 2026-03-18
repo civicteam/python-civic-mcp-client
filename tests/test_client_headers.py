@@ -33,7 +33,6 @@ async def test_direct_token_maps_context_headers() -> None:
     backend = RecordingBackend()
     client = CivicMCPClient(
         auth={"token": "direct-token"},
-        civic_account="account-123",
         civic_profile="profile-456",
         headers={"x-extra-header": "hello"},
         backend=backend,
@@ -42,7 +41,6 @@ async def test_direct_token_maps_context_headers() -> None:
     await client.get_tools()
     assert backend.last_headers is not None
     assert backend.last_headers["Authorization"] == "Bearer direct-token"
-    assert backend.last_headers["x-civic-account-id"] == "account-123"
     assert backend.last_headers["x-civic-profile-id"] == "profile-456"
     assert backend.last_headers["x-extra-header"] == "hello"
     assert "User-Agent" in backend.last_headers
@@ -59,7 +57,6 @@ async def test_token_exchange_auth_used_for_headers() -> None:
                 subject_token=lambda: "external-token",
             )
         },
-        civic_account="account-123",
         civic_profile="profile-456",
         backend=backend,
     )
@@ -67,11 +64,8 @@ async def test_token_exchange_auth_used_for_headers() -> None:
     # Inject a deterministic exchange requester for test reliability.
     assert client._token_exchange_manager is not None
 
-    async def requester(
-        cfg: TokenExchangeConfig, subject: str, civic_account: str | None, civic_profile: str | None
-    ) -> dict[str, Any]:
+    async def requester(cfg: TokenExchangeConfig, subject: str, civic_profile: str | None) -> dict[str, Any]:
         del cfg, subject
-        assert civic_account == "account-123"
         assert civic_profile == "profile-456"
         return {"access_token": "exchanged-token", "expires_in": 120}
 
@@ -80,3 +74,10 @@ async def test_token_exchange_auth_used_for_headers() -> None:
     await client.get_server_instructions()
     assert backend.last_headers is not None
     assert backend.last_headers["Authorization"] == "Bearer exchanged-token"
+
+
+@pytest.mark.asyncio
+async def test_get_access_token_returns_current_token() -> None:
+    backend = RecordingBackend()
+    client = CivicMCPClient(auth={"token": "direct-token"}, backend=backend)
+    assert await client.get_access_token() == "direct-token"

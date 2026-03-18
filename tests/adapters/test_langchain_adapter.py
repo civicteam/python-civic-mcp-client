@@ -4,7 +4,7 @@ import pytest
 
 from civic_mcp_client.adapters.langchain import (
     execute_langchain_tool_call,
-    get_langchain_tool_schemas,
+    langchain,
     parse_langchain_tool_call,
 )
 from civic_mcp_client.client import CivicMCPClient
@@ -39,10 +39,10 @@ class StubBackend:
 
 
 @pytest.mark.asyncio
-async def test_langchain_tool_schema_shape():
+async def test_langchain_adapt_for_returns_schemas():
     backend = StubBackend()
     client = CivicMCPClient(auth={"token": "token"}, backend=backend)
-    schemas = await get_langchain_tool_schemas(client)
+    schemas = await client.adapt_for(langchain())
     assert schemas[0]["type"] == "function"
     assert schemas[0]["function"]["name"] == "search_docs"
     assert backend.last_headers is not None

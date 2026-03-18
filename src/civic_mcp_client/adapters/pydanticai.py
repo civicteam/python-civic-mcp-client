@@ -13,13 +13,11 @@ class PydanticAIToolDefinition:
     parameters_json_schema: dict[str, Any]
 
 
-@dataclass(slots=True)
-class PydanticAIToolsetBridge:
-    client: CivicMCPClient
+def pydanticai():
+    """Return an adapter for use with client.adapt_for(pydanticai())."""
 
-    async def list_tools(self) -> list[PydanticAIToolDefinition]:
-        tools = await self.client.get_tools()
-        raw_tools = tools.get("tools", []) if isinstance(tools, Mapping) else []
+    async def adapter(_client: CivicMCPClient, raw_tools_payload: Mapping[str, Any]) -> list[PydanticAIToolDefinition]:
+        raw_tools = raw_tools_payload.get("tools", []) if isinstance(raw_tools_payload, Mapping) else []
         result: list[PydanticAIToolDefinition] = []
         for tool in raw_tools:
             if not isinstance(tool, Mapping):
@@ -37,9 +35,4 @@ class PydanticAIToolsetBridge:
             )
         return result
 
-    async def call_tool(self, name: str, args: Mapping[str, Any]) -> dict[str, Any]:
-        return await self.client.call_tool(name=name, args=args)
-
-
-def to_pydanticai_toolset(client: CivicMCPClient) -> PydanticAIToolsetBridge:
-    return PydanticAIToolsetBridge(client=client)
+    return adapter

@@ -13,26 +13,6 @@ class LangChainToolCall:
     arguments: dict[str, Any]
 
 
-async def get_langchain_tool_schemas(client: CivicMCPClient) -> list[dict[str, Any]]:
-    tools = await client.get_tools()
-    raw_tools = tools.get("tools", []) if isinstance(tools, Mapping) else []
-    schemas: list[dict[str, Any]] = []
-    for tool in raw_tools:
-        if not isinstance(tool, Mapping):
-            continue
-        schemas.append(
-            {
-                "type": "function",
-                "function": {
-                    "name": tool.get("name"),
-                    "description": tool.get("description"),
-                    "parameters": tool.get("inputSchema", {"type": "object"}),
-                },
-            }
-        )
-    return schemas
-
-
 def parse_langchain_tool_call(tool_call: Mapping[str, Any]) -> LangChainToolCall:
     name = str(tool_call.get("name", ""))
     if not name:
@@ -57,3 +37,27 @@ async def execute_langchain_tool_call(
 ) -> dict[str, Any]:
     parsed = parse_langchain_tool_call(tool_call)
     return await client.call_tool(name=parsed.name, args=parsed.arguments)
+
+
+def langchain():
+    """Return an adapter for use with client.adapt_for(langchain())."""
+
+    async def adapter(_client: CivicMCPClient, raw_tools_payload: Mapping[str, Any]) -> list[dict[str, Any]]:
+        raw_tools = raw_tools_payload.get("tools", []) if isinstance(raw_tools_payload, Mapping) else []
+        schemas: list[dict[str, Any]] = []
+        for tool in raw_tools:
+            if not isinstance(tool, Mapping):
+                continue
+            schemas.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": tool.get("name"),
+                        "description": tool.get("description"),
+                        "parameters": tool.get("inputSchema", {"type": "object"}),
+                    },
+                }
+            )
+        return schemas
+
+    return adapter

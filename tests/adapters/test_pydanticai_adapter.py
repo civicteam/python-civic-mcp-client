@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from civic_mcp_client.adapters.pydanticai import to_pydanticai_toolset
+from civic_mcp_client.adapters.pydanticai import pydanticai
 from civic_mcp_client.client import CivicMCPClient
 
 
@@ -35,11 +35,10 @@ class StubBackend:
 
 
 @pytest.mark.asyncio
-async def test_pydanticai_bridge_lists_tools():
+async def test_pydanticai_adapt_for_returns_tool_definitions():
     backend = StubBackend()
     client = CivicMCPClient(auth={"token": "token"}, backend=backend)
-    bridge = to_pydanticai_toolset(client)
-    tools = await bridge.list_tools()
+    tools = await client.adapt_for(pydanticai())
     assert len(tools) == 1
     assert tools[0].name == "search_docs"
     assert tools[0].parameters_json_schema["type"] == "object"
@@ -48,11 +47,11 @@ async def test_pydanticai_bridge_lists_tools():
 
 
 @pytest.mark.asyncio
-async def test_pydanticai_bridge_call_tool_uses_client_auth_headers():
+async def test_pydanticai_adapt_for_client_call_tool_uses_auth_headers():
     backend = StubBackend()
     client = CivicMCPClient(auth={"token": "token-2"}, backend=backend)
-    bridge = to_pydanticai_toolset(client)
-    result = await bridge.call_tool("search_docs", {"query": "hello"})
+    await client.adapt_for(pydanticai())
+    result = await client.call_tool(name="search_docs", args={"query": "hello"})
     assert result["name"] == "search_docs"
     assert backend.last_headers is not None
     assert backend.last_headers["Authorization"] == "Bearer token-2"

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from dataclasses import asdict, dataclass
 from typing import Any, Mapping
 
@@ -19,7 +20,6 @@ from .types import (
 class _ResolvedConfig:
     url: str
     auth: TokenAuth | TokenExchangeAuth
-    civic_account: str | None
     civic_profile: str | None
     headers: dict[str, str]
     client_name: str
@@ -34,8 +34,7 @@ class CivicMCPClient:
         self,
         *,
         auth: AuthInput,
-        url: str = "https://nexus.civic.com/hub/mcp",
-        civic_account: str | None = None,
+        url: str = "https://app.civic.com/hub/mcp",
         civic_profile: str | None = None,
         headers: Mapping[str, str] | None = None,
         client_name: str = "civic-mcp-client-python",
@@ -48,7 +47,6 @@ class CivicMCPClient:
         config = CivicMCPClientConfig(
             auth=auth,
             url=url,
-            civic_account=civic_account,
             civic_profile=civic_profile,
             headers=dict(headers) if headers else None,
             client_name=client_name,
@@ -73,13 +71,42 @@ class CivicMCPClient:
         as_dict = asdict(config)
         return cls(**as_dict, backend=backend)
 
-    async def get_tools(self, adapter: Any | None = None) -> Any:
-        raw = await self._backend.list_tools(headers=await self._build_auth_headers())
-        if adapter is None:
-            return raw
-        if callable(adapter):
-            return await adapter(self, raw)
-        raise TypeError("adapter must be callable or None")
+    async def get_tools(self) -> Any:
+        """Return raw MCP tools from the hub."""
+        return await self._get_raw_tools()
+
+    async def adapt_for(self, adapter: Any) -> Any:
+        """
+        Run the given adapter and return either a new CivicMCPClient (backend adapters)
+        or adapter-native tool output (e.g. list of schemas or tool definitions).
+
+        Usage:
+            client.adapt_for(fastmcp())   -> CivicMCPClient with FastMCP backend
+            client.adapt_for(langchain()) -> list of LangChain tool schemas
+            client.adapt_for(pydanticai()) -> list of PydanticAI tool definitions
+        """
+        if not callable(adapter):
+            raise TypeError("adapter must be callable")
+
+        if self._adapter_accepts_raw_tools(adapter):
+            raw_tools = await self._get_raw_tools()
+            adapted = adapter(self, raw_tools)
+        else:
+            adapted = adapter(self)
+
+        if inspect.isawaitable(adapted):
+            adapted = await adapted
+
+        if isinstance(adapted, CivicMCPClient):
+            return adapted
+        if self._looks_like_backend(adapted):
+            return CivicMCPClient.from_config(self.get_config(), backend=adapted)
+
+        get_tools = getattr(adapted, "get_tools", None)
+        if callable(get_tools):
+            value = get_tools()
+            return await value if inspect.isawaitable(value) else value
+        return adapted
 
     async def get_server_instructions(self) -> str:
         return await self._backend.get_server_instructions(headers=await self._build_auth_headers())
@@ -87,14 +114,42 @@ class CivicMCPClient:
     async def call_tool(self, *, name: str, args: Mapping[str, Any]) -> dict[str, Any]:
         return await self._backend.call_tool(name=name, args=dict(args), headers=await self._build_auth_headers())
 
+    async def get_access_token(self) -> str:
+        """
+        Return the access token currently used for hub authentication.
+        For token exchange auth, this returns the cached/exchanged token.
+        """
+        return await self._resolve_access_token()
+
     async def close(self) -> None:
         await self._backend.close()
+
+    async def _get_raw_tools(self) -> Any:
+        return await self._backend.list_tools(headers=await self._build_auth_headers())
+
+    def _adapter_accepts_raw_tools(self, adapter: Any) -> bool:
+        try:
+            sig = inspect.signature(adapter)
+        except (TypeError, ValueError):
+            return False
+
+        required_positionals = [
+            param
+            for param in sig.parameters.values()
+            if param.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+            and param.default is inspect.Parameter.empty
+        ]
+        has_varargs = any(param.kind == inspect.Parameter.VAR_POSITIONAL for param in sig.parameters.values())
+        return len(required_positionals) >= 2 or has_varargs
+
+    def _looks_like_backend(self, value: Any) -> bool:
+        required_methods = ("list_tools", "get_server_instructions", "call_tool", "close")
+        return all(callable(getattr(value, method, None)) for method in required_methods)
 
     def get_config(self) -> CivicMCPClientConfig:
         return CivicMCPClientConfig(
             auth=self._config.auth,
             url=self._config.url,
-            civic_account=self._config.civic_account,
             civic_profile=self._config.civic_profile,
             headers=dict(self._config.headers),
             client_name=self._config.client_name,
@@ -108,7 +163,6 @@ class CivicMCPClient:
         token = await self._resolve_access_token()
         headers = build_context_headers(
             base_headers=self._config.headers,
-            civic_account=self._config.civic_account,
             civic_profile=self._config.civic_profile,
         )
         headers["Authorization"] = f"Bearer {token}"
@@ -122,7 +176,6 @@ class CivicMCPClient:
         if isinstance(auth, TokenExchangeAuth):
             assert self._token_exchange_manager is not None
             return await self._token_exchange_manager.get_access_token(
-                civic_account=self._config.civic_account,
                 civic_profile=self._config.civic_profile,
             )
         raise RuntimeError("unsupported auth configuration")
@@ -131,7 +184,6 @@ class CivicMCPClient:
         return _ResolvedConfig(
             url=config.url,
             auth=parse_auth(config.auth),
-            civic_account=config.civic_account,
             civic_profile=config.civic_profile,
             headers=dict(config.headers or {}),
             client_name=config.client_name,

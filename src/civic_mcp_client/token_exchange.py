@@ -16,7 +16,7 @@ class TokenExchangeError(RuntimeError):
     pass
 
 
-TokenRequester = Callable[[TokenExchangeConfig, str, str | None, str | None], Awaitable[dict[str, Any]]]
+TokenRequester = Callable[[TokenExchangeConfig, str, str | None], Awaitable[dict[str, Any]]]
 
 
 @dataclass(slots=True)
@@ -40,7 +40,6 @@ class TokenExchangeManager:
 
     async def get_access_token(
         self,
-        civic_account: str | None = None,
         civic_profile: str | None = None,
     ) -> str:
         try:
@@ -59,7 +58,7 @@ class TokenExchangeManager:
             task = self._inflight_by_subject.get(subject)
             if task is None:
                 task = asyncio.create_task(
-                    self._exchange_and_store(subject, civic_account=civic_account, civic_profile=civic_profile)
+                    self._exchange_and_store(subject, civic_profile=civic_profile)
                 )
                 self._inflight_by_subject[subject] = task
 
@@ -74,10 +73,9 @@ class TokenExchangeManager:
     async def _exchange_and_store(
         self,
         subject: str,
-        civic_account: str | None,
         civic_profile: str | None,
     ) -> str:
-        payload = await self._requester(self._config, subject, civic_account, civic_profile)
+        payload = await self._requester(self._config, subject, civic_profile)
         access_token = payload.get("access_token")
         if not isinstance(access_token, str) or not access_token.strip():
             await self._clear_cache()
@@ -103,7 +101,6 @@ class TokenExchangeManager:
         self,
         config: TokenExchangeConfig,
         subject_token: str,
-        civic_account: str | None,
         civic_profile: str | None,
     ) -> dict[str, Any]:
         basic = base64.b64encode(f"{config.client_id}:{config.client_secret}".encode("utf-8")).decode("ascii")
@@ -114,15 +111,20 @@ class TokenExchangeManager:
         form: dict[str, str] = {
             "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
             "subject_token": subject_token,
+            "subject_token_type": "urn:ietf:params:oauth:token-type:access_token",
         }
-        if config.lock_to_account and civic_account:
-            form["civic_account"] = civic_account
+        if config.expires_in is not None:
+            form["expires_in"] = str(config.expires_in)
         if config.lock_to_profile and civic_profile:
             form["civic_profile"] = civic_profile
 
         async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.post(config.auth_url, headers=headers, data=form)
-            response.raise_for_status()
+            if not response.is_success:
+                err_body = (response.text or "")[:500]
+                raise TokenExchangeError(
+                    f"token exchange failed ({response.status_code}): {err_body}"
+                )
             data = response.json()
             if not isinstance(data, dict):
                 raise TokenExchangeError("token exchange response must be a JSON object")

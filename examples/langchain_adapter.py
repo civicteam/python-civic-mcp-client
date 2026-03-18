@@ -4,7 +4,7 @@ import asyncio
 import os
 
 from civic_mcp_client import CivicMCPClient
-from civic_mcp_client.adapters.langchain import get_langchain_tool_schemas
+from civic_mcp_client.adapters.langchain import langchain
 
 
 async def main() -> None:
@@ -14,13 +14,12 @@ async def main() -> None:
 
     client = CivicMCPClient(
         auth={"token": token},
-        url=os.getenv("CIVIC_MCP_HUB_URL", "https://nexus.civic.com/hub/mcp"),
-        civic_account=os.getenv("CIVIC_ACCOUNT_ID"),
+        url=os.getenv("CIVIC_MCP_HUB_URL", "https://app.civic.com/hub/mcp"),
         civic_profile=os.getenv("CIVIC_PROFILE_ID"),
     )
 
     try:
-        schemas = await get_langchain_tool_schemas(client)
+        schemas = await client.adapt_for(langchain())
         print(f"LangChain schema count: {len(schemas)}")
         if schemas:
             first = schemas[0]["function"]["name"]

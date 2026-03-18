@@ -4,7 +4,7 @@ import asyncio
 import os
 
 from civic_mcp_client import CivicMCPClient
-from civic_mcp_client.adapters.pydanticai import to_pydanticai_toolset
+from civic_mcp_client.adapters.pydanticai import pydanticai
 
 
 async def main() -> None:
@@ -14,14 +14,12 @@ async def main() -> None:
 
     client = CivicMCPClient(
         auth={"token": token},
-        url=os.getenv("CIVIC_MCP_HUB_URL", "https://nexus.civic.com/hub/mcp"),
-        civic_account=os.getenv("CIVIC_ACCOUNT_ID"),
+        url=os.getenv("CIVIC_MCP_HUB_URL", "https://app.civic.com/hub/mcp"),
         civic_profile=os.getenv("CIVIC_PROFILE_ID"),
     )
 
     try:
-        toolset = to_pydanticai_toolset(client)
-        tools = await toolset.list_tools()
+        tools = await client.adapt_for(pydanticai())
         print(f"PydanticAI tool count: {len(tools)}")
         if tools:
             print(f"First tool name: {tools[0].name}")

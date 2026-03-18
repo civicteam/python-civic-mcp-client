@@ -54,7 +54,7 @@ def parse_auth(auth: AuthInput) -> TokenAuth | TokenExchangeAuth:
                 client_secret=str(raw["client_secret"]),
                 subject_token=subject_token,
                 auth_url=str(raw.get("auth_url", "https://auth.civic.com/oauth/token")),
-                lock_to_account=bool(raw.get("lock_to_account", True)),
+                expires_in=int(raw["expires_in"]) if raw.get("expires_in") is not None else None,
                 lock_to_profile=bool(raw.get("lock_to_profile", True)),
             )
         )
@@ -78,12 +78,9 @@ async def resolve_token(token: TokenInput) -> str:
 
 def build_context_headers(
     base_headers: Mapping[str, str] | None,
-    civic_account: str | None,
     civic_profile: str | None,
 ) -> dict[str, str]:
     headers = dict(base_headers or {})
-    if civic_account:
-        headers["x-civic-account-id"] = civic_account
     if civic_profile:
         headers["x-civic-profile-id"] = civic_profile
     return headers

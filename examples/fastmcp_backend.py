@@ -4,7 +4,7 @@ import asyncio
 import os
 
 from civic_mcp_client import CivicMCPClient
-from civic_mcp_client.adapters.fastmcp import create_fastmcp_backend
+from civic_mcp_client.adapters.fastmcp import fastmcp
 
 
 async def main() -> None:
@@ -12,21 +12,20 @@ async def main() -> None:
     if not token:
         raise RuntimeError("CIVIC_ACCESS_TOKEN is required")
 
-    backend = await create_fastmcp_backend(
-        os.getenv("CIVIC_MCP_HUB_URL", "https://nexus.civic.com/hub/mcp")
-    )
     client = CivicMCPClient(
         auth={"token": token},
-        civic_account=os.getenv("CIVIC_ACCOUNT_ID"),
+        url=os.getenv("CIVIC_MCP_HUB_URL", "https://app.civic.com/hub/mcp"),
         civic_profile=os.getenv("CIVIC_PROFILE_ID"),
-        backend=backend,
     )
 
+    fastmcp_client = await client.adapt_for(fastmcp())
+
     try:
-        tools = await client.get_tools()
+        tools = await fastmcp_client.get_tools()
         tool_count = len(tools.get("tools", [])) if isinstance(tools, dict) else 0
         print(f"FastMCP backend tool count: {tool_count}")
     finally:
+        await fastmcp_client.close()
         await client.close()
 
 

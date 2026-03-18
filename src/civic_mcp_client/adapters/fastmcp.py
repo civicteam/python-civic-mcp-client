@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import TYPE_CHECKING, Any, Mapping
 
 from ..backends import MCPBackend
+
+if TYPE_CHECKING:
+    from ..client import CivicMCPClient
 
 
 class FastMCPDependencyError(ImportError):
@@ -84,7 +87,7 @@ class FastMCPBackend:
         self._header_signature = None
 
 
-async def create_fastmcp_backend(url: str) -> MCPBackend:
+async def _create_fastmcp_backend(url: str) -> MCPBackend:
     try:
         from fastmcp import Client
         from fastmcp.client import StreamableHttpTransport
@@ -94,3 +97,13 @@ async def create_fastmcp_backend(url: str) -> MCPBackend:
         ) from exc
 
     return FastMCPBackend(url=url, client_cls=Client, transport_cls=StreamableHttpTransport)
+
+
+def fastmcp(*, url: str | None = None):
+    """Return an adapter for use with client.adapt_for(fastmcp())."""
+
+    async def adapter(client: CivicMCPClient) -> MCPBackend:
+        target_url = url or client.get_config().url
+        return await _create_fastmcp_backend(target_url)
+
+    return adapter

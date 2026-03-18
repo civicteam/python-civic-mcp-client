@@ -14,7 +14,7 @@ class TokenExchangeConfig:
     client_secret: str
     subject_token: TokenInput
     auth_url: str = "https://auth.civic.com/oauth/token"
-    lock_to_account: bool = True
+    expires_in: int | None = None
     lock_to_profile: bool = True
 
 
@@ -42,8 +42,7 @@ class ReconnectionOptions:
 @dataclass(slots=True)
 class CivicMCPClientConfig:
     auth: AuthInput
-    url: str = "https://nexus.civic.com/hub/mcp"
-    civic_account: str | None = None
+    url: str = "https://app.civic.com/hub/mcp"
     civic_profile: str | None = None
     headers: dict[str, str] | None = None
     client_name: str = "civic-mcp-client-python"
