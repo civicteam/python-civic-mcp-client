@@ -33,7 +33,6 @@ async def main() -> None:
                 "auth_url": os.getenv("CIVIC_AUTH_URL", "https://auth.civic.com/oauth/token"),
             }
         },
-        url=os.getenv("CIVIC_MCP_HUB_URL", "https://app.civic.com/hub/mcp"),
         civic_profile=os.getenv("CIVIC_PROFILE_ID"),
     )
 

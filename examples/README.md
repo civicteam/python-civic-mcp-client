@@ -13,7 +13,6 @@ uv sync --extra examples --extra pydanticai --extra langchain --extra fastmcp
 
 - Set your environment variables as needed (either via shell exports or a `.env` file):
   - `CIVIC_ACCESS_TOKEN`
-  - `CIVIC_MCP_HUB_URL` (optional, defaults to `https://app.civic.com/hub/mcp`)
   - `CIVIC_PROFILE_ID` (optional)
   - `CIVIC_CLIENT_ID` (token exchange example)
   - `CIVIC_CLIENT_SECRET` (token exchange example)

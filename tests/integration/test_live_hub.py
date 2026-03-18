@@ -16,12 +16,10 @@ async def test_live_hub_smoke():
     if not token:
         pytest.skip("CIVIC_ACCESS_TOKEN is not configured")
 
-    url = os.getenv("CIVIC_MCP_HUB_URL", "https://app.civic.com/hub/mcp")
     profile = os.getenv("CIVIC_PROFILE_ID")
 
     client = CivicMCPClient(
         auth={"token": token},
-        url=url,
         civic_profile=profile,
     )
 

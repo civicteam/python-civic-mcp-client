@@ -13,7 +13,6 @@ async def main() -> None:
 
     client = CivicMCPClient(
         auth={"token": token},
-        url=os.getenv("CIVIC_MCP_HUB_URL", "https://app.civic.com/hub/mcp"),
         civic_profile=os.getenv("CIVIC_PROFILE_ID"),
     )
 

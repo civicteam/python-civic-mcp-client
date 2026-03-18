@@ -136,7 +136,6 @@ from civic_mcp_client.adapters.fastmcp import fastmcp
 client = CivicMCPClient(
     auth={"token": "your-civic-access-token"},
     civic_profile="optional-profile-id",
-    url="https://app.civic.com/hub/mcp",
 )
 
 fastmcp_client = await client.adapt_for(fastmcp())
