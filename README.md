@@ -19,11 +19,12 @@ uv sync --extra pydanticai --extra langchain --extra fastmcp
 ## Quick Start
 
 ```python
+import os
 from civic_mcp_client import CivicMCPClient
 
 client = CivicMCPClient(
-    auth={"token": "your-civic-access-token"},
-    civic_profile="7c9e6679-7425-40de-944b-e07fc1f90ae7",
+    auth={"token": os.environ["CIVIC_ACCESS_TOKEN"]},
+    civic_profile=os.getenv("CIVIC_PROFILE_ID"),
 )
 
 tools = await client.get_tools()
@@ -32,6 +33,37 @@ result = await client.call_tool(name="tool-name", args={"foo": "bar"})
 
 await client.close()
 ```
+
+> Recommended: use the demo app for a production-like frontend + Python backend setup.
+
+## Demo-first setup (recommended)
+
+Start with the reference implementation here:
+
+- https://github.com/civicteam/demos/tree/main/apps/civic-auth-demo-python-backend
+
+That demo uses `@civic/auth` in the frontend and forwards the authenticated Civic access token to the Python backend (which then passes it into `CivicMCPClient(auth={"token": ...})`).
+
+## Optional: Manually self-serve `CIVIC_ACCESS_TOKEN` (local testing only)
+
+Use the existing Civic install flow:
+
+1. Open https://app.civic.com/web/install/mcp-url
+2. Click **Generate token**
+3. Copy the returned `access_token`
+4. Set it in your app as `CIVIC_ACCESS_TOKEN`
+
+Treat this as a secret and keep it out of source control. Token expiry and rotation follow Civic's token lifecycle.
+
+### Separated frontend and backend apps
+
+If your frontend is separate from your Python backend (for example, a Next.js frontend with `@civic/auth/nextjs`):
+
+- Frontend obtains the user session token at runtime
+- Backend receives that token and passes it to `CivicMCPClient(auth={"token": ...})`
+- Keep `CIVIC_CLIENT_ID` and `CIVIC_PROFILE_ID` as app configuration values
+
+The manual self-serve flow above is useful for local testing when you want to bypass a full frontend session.
 
 ## Token Exchange (RFC 8693)
 
