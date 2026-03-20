@@ -19,12 +19,12 @@ uv sync --extra pydanticai --extra langchain --extra fastmcp
 ## Quick Start
 
 ```python
-import os
 from civic_mcp_client import CivicMCPClient
 
+access_token = "your-civic-access-token"  # e.g., from your session or the demo app
+
 client = CivicMCPClient(
-    auth={"token": os.environ["CIVIC_ACCESS_TOKEN"]},
-    civic_profile=os.getenv("CIVIC_PROFILE_ID"),
+    auth={"token": access_token},
 )
 
 tools = await client.get_tools()
@@ -80,7 +80,6 @@ client = CivicMCPClient(
             "expires_in": 3600,  # optional requested lifetime in seconds
         }
     },
-    civic_profile="7c9e6679-7425-40de-944b-e07fc1f90ae7",
 )
 ```
 
@@ -168,12 +167,22 @@ from civic_mcp_client.adapters.fastmcp import fastmcp
 
 client = CivicMCPClient(
     auth={"token": "your-civic-access-token"},
-    civic_profile="optional-profile-id",
 )
 
 fastmcp_client = await client.adapt_for(fastmcp())
 # fastmcp_client is a CivicMCPClient with FastMCP backend; auth/headers come from config
 tools = await fastmcp_client.get_tools()
+```
+
+## Optional Profile Scoping (advanced)
+
+If you want to lock requests to a specific profile, pass `civic_profile`:
+
+```python
+client = CivicMCPClient(
+    auth={"token": "your-civic-access-token"},
+    civic_profile="optional-profile-id",
+)
 ```
 
 ## Interface Notes
